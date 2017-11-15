@@ -1,5 +1,7 @@
 # encoding: utf-8
 from tqdm import *
+from plotnine import *
+from time import sleep
 
 #data = '../Datasets/All_Data/2017-06-27_Threaded_Rhodo_PC_NC-C_NC-NC_Glycerol_50umol/Rhodo_Chrono_NoGlycerol.xlsx'
 #data = '../Datasets/All_Data/2017-05-12_No_Cells/2017-05-31_NC_NS_NC/NC_NC_NS.xlsx'
@@ -8,6 +10,16 @@ from tqdm import *
 #data = '../Datasets/All_Data/2017-05-09_Rhodo_Glucose_V2/Copy of chronoamperometry try 2 (day 2).xlsx'
 #data = '../Datasets/All_Data/2017-05-12_No_Cells/2017-05-31_NC_NS_NC/NC_NC_NS.xlsx'
 data = '../Datasets/All_Data/2017-10-31_Synechocystis_Stabilization_12Plate_Light_Partial/Chronoamperometry_2017_10_31_Synechocystis_light_700ul_Stabilization_Partial.xlsx'
+
+data = '../Datasets/All_Data/2017-11-03_LS_vs_NoLS/Chronoamperometry_5ml_Light_synechocystis_full_no_ls_pretreatment.xlsx'
+data = '../Datasets/All_Data/2017-11-03_LS_vs_NoLS/Chronoamperometry_5ml_Light_synechocystis_full_with_ls_pretreatment.xlsx'
+
+# data2 = '../Datasets/All_Data/2017-11-08/Rhodo_5ml_lowlight_stabilization.xlsx'
+# data2 = '../Datasets/All_Data/2017-11-09/Rhodo_Glycerol_lowlight_25mM_stabilized_v2.xlsx'
+# data2 = '../Datasets/All_Data/2017-11-09/Rhodo_Glycerol_lowlight_25mM.xlsx'
+# data2 = '../Datasets/All_Data/2017-11-13/Chronoamperometry_0.1mM_Fericyanide_5000s_900mV_Bias_Potential.xlsx'
+# data2 = '../Datasets/All_Data/2017-11-13/Chronoamperometry_0.1mM_Fericyanide_5000s.xlsx'
+data2 = '../Datasets/All_Data/2017-11-11/Rhodo_Glucose_lowlight_25mM_stabilized.xlsx'
 
 
 def construct_dataframe(raw_data):
@@ -48,10 +60,17 @@ def plot_dataframe(data_frame, span):
     plot = (
 
         (ggplot(data_frame, aes('Time', 'Current', color='Channel'))
-        + ylab(u'Current (μA)')
-        + xlab('Time (seconds)')
-        + geom_line())
-        + stat_smooth(span=span, method='lowess')
+            + ylab(u'Current (μA)')
+            + xlab('Time (seconds)')
+            + geom_line()
+            + scale_y_log10()
+            + scale_x_log10())
+            # + theme_bw()
+            # + scale_color_grey()
+
+            # + geom_smooth(span=span, method='lowess'))
+
+            # + stat_smooth(span=span, method='loess')
 
     )
 
@@ -89,6 +108,8 @@ def construct_loess_regression(raw_data):
     channels = construct_dataframe(data)[1]
 
     dfs = dict(list(df.groupby("Channel")))
+
+    print('Constructing regression smoothing data series...')
 
     for i in range(0, len(channels)):
         print(dfs[channels[i]])
@@ -162,26 +183,18 @@ def construct_lowess_regression(raw_data, span):
     Creates a smoothed regression based on the Lowess algorithm.
     '''
 
-
-    import pandas as pd
     import numpy as np
     from statsmodels.nonparametric.smoothers_lowess import lowess
 
     df = construct_dataframe(raw_data)[0]
 
-    #print (df.shape)
-    #exit()
-
     channels = construct_dataframe(raw_data)[1]
 
     dfs = dict(list(df.groupby("Channel")))
 
-    # dfs_lo = np.empty(shape=(73596, 2), dtype=np.float64)
-
     dfs_lo = []
 
     for i in tqdm(range(0, len(channels))):
-        # print(dfs[channels[i]])
 
         dfs_i = dfs[channels[i]]
 
@@ -191,27 +204,13 @@ def construct_lowess_regression(raw_data, span):
         y = dfs_i['Current']
         y = np.asarray(y)
 
-
-        #print(x.shape)
-        #print(y.shape)
-
         lo = lowess(y, x, frac=span, it=1, delta=0.0, is_sorted=True, return_sorted=False)
-
-        #lo.tolist()
-
-        #print (lo)
-        #print(lo.shape)
-        #exit()
-
-        #np.append(dfs_lo, lo)
 
         dfs_lo.append(lo)
 
-    #print (dfs_lo.shape)
-
     dfs_lo = np.concatenate(dfs_lo).ravel()  # .tolist()
 
-    print (dfs_lo)
+    # print (dfs_lo)
 
     #exit()
 
@@ -220,9 +219,166 @@ def construct_lowess_regression(raw_data, span):
     return df
 
 
-span = 0.2
+def calculate_median_absolute_deviation_from_signal(data_frame, raw_data, df_name):
+    import numpy as np
+    from time import sleep
+    import pandas as pd
 
-df = construct_lowess_regression(data, span)
+    df = data_frame
+
+    channels = construct_dataframe(raw_data)[1]
+
+    dfs = dict(list(df.groupby("Channel")))
+
+    ads_list = []
+    ch_list = []
+
+    print ('calculating median absolute deviation of measured current from regression signal...')
+
+    for i in tqdm(range(0, len(channels))):
+
+        dfs_i = dfs[channels[i]]
+
+        n = dfs_i['Current']
+        n = np.asarray(n)
+
+        s = dfs_i['Regression']
+        s = np.asarray(s)
+
+        d = np.median(abs(np.subtract(n, s)))
+
+        ads_list.append(d)
+
+        ch_list.append('CH' + str(i+1))
+
+    ads_df = pd.DataFrame(ads_list, columns=['Deviation'])
+
+    ads_df['Experiment'] = df_name
+    ads_df['Channel'] = ch_list
+
+    #ads_df['Channel']
+
+    print (ads_df)
+
+    return ads_df
+
+
+def calculate_absolute_deviation_from_signal_per_channel(data_frame, raw_data):
+    import numpy as np
+    from time import sleep
+    import pandas as pd
+
+    df = data_frame
+
+    channels = construct_dataframe(raw_data)[1]
+
+    dfs = dict(list(df.groupby("Channel")))
+
+    ads_list = []
+
+    print ('calculating median absolute deviation of measured current from regression signal...')
+
+    for i in tqdm(range(0, len(channels))):
+
+        dfs_i = dfs[channels[i]]
+
+        n = dfs_i['Current']
+        n = np.asarray(n)
+
+        s = dfs_i['Regression']
+        s = np.asarray(s)
+
+        d = abs(np.subtract(n, s))
+
+        ads_list.append(d)
+
+    dfs_ads = np.concatenate(ads_list).ravel()  # .tolist()
+
+    df['Deviation'] = dfs_ads
+
+    return df
+
+
+def plot_median_absolute_deviation_from_signal(ads):
+
+    plot = (
+
+        (ggplot(ads, aes('Experiment', 'Deviation'))
+         + stat_boxplot())
+
+    )
+
+    # print (plot)
+
+    return plot
+
+
+def plot_absolute_deviation_from_signal_per_channel(dev_df):
+
+    plot = (
+
+        (ggplot(dev_df, aes('Channel', 'Deviation'))
+         + stat_boxplot())
+
+    )
+
+    return plot
+
+
+def compare_absolute_deviation_between_runs(data1, data2):
+
+    span = 0.2
+    df1_name = 'no_ls'
+    df2_name = 'ls'
+
+    df1 = construct_lowess_regression(data1, span)
+    df2 = construct_lowess_regression(data2, span)
+
+    ads_df1 = calculate_median_absolute_deviation_from_signal(df1, data1, df1_name)
+    ads_df2 = calculate_median_absolute_deviation_from_signal(df2, data2, df2_name)
+
+    all_df = ads_df1.append(ads_df2)
+
+    plot = plot_median_absolute_deviation_from_signal(all_df)
+    print(plot)
+
+    return all_df
+
+
+#all_df = compare_absolute_deviation_between_runs(data1, data2)
+
+#exit()
+
+span = 0.2
+df_name = 'no_ls'
+
+df = construct_dataframe(data2)
+df = df[0]
+
+#df = construct_lowess_regression(data2, span)
+
+print (df)
+
+sleep(.1)
+
+plot = plot_dataframe(df, span)
+
+print(plot)
+exit()
+
+# dev_df = calculate_absolute_deviation_from_signal_per_channel(df, data)
+
+ads = calculate_median_absolute_deviation_from_signal(df, data, df_name)
+
+plot = plot_median_absolute_deviation_from_signal(ads)
+
+# plot = plot_absolute_deviation_from_signal_per_channel(dev_df)
+
+print (plot)
+
+# print (ads)
+
+exit()
 
 print (df)
 
