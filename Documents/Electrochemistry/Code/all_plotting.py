@@ -2,6 +2,8 @@
 from tqdm import *
 from plotnine import *
 from time import sleep
+import pandas as pd
+from scipy import stats
 
 #data = '../Datasets/All_Data/2017-06-27_Threaded_Rhodo_PC_NC-C_NC-NC_Glycerol_50umol/Rhodo_Chrono_NoGlycerol.xlsx'
 #data = '../Datasets/All_Data/2017-05-12_No_Cells/2017-05-31_NC_NS_NC/NC_NC_NS.xlsx'
@@ -9,18 +11,21 @@ from time import sleep
 #data = '../Datasets/All_Data/2017-05-09_Rhodo_Glucose_V2/chronoamperometry_try_2_day_3.xlsx'
 #data = '../Datasets/All_Data/2017-05-09_Rhodo_Glucose_V2/Copy of chronoamperometry try 2 (day 2).xlsx'
 #data = '../Datasets/All_Data/2017-05-12_No_Cells/2017-05-31_NC_NS_NC/NC_NC_NS.xlsx'
-data = '../Datasets/All_Data/2017-10-31_Synechocystis_Stabilization_12Plate_Light_Partial/Chronoamperometry_2017_10_31_Synechocystis_light_700ul_Stabilization_Partial.xlsx'
+#data = '../Datasets/All_Data/2017-10-31_Synechocystis_Stabilization_12Plate_Light_Partial/Chronoamperometry_2017_10_31_Synechocystis_light_700ul_Stabilization_Partial.xlsx'
 
-data = '../Datasets/All_Data/2017-11-03_LS_vs_NoLS/Chronoamperometry_5ml_Light_synechocystis_full_no_ls_pretreatment.xlsx'
-data = '../Datasets/All_Data/2017-11-03_LS_vs_NoLS/Chronoamperometry_5ml_Light_synechocystis_full_with_ls_pretreatment.xlsx'
+#data = '../Datasets/All_Data/2017-11-03_LS_vs_NoLS/Chronoamperometry_5ml_Light_synechocystis_full_no_ls_pretreatment.xlsx'
+#data = '../Datasets/All_Data/2017-11-03_LS_vs_NoLS/Chronoamperometry_5ml_Light_synechocystis_full_with_ls_pretreatment.xlsx'
 
 # data2 = '../Datasets/All_Data/2017-11-08/Rhodo_5ml_lowlight_stabilization.xlsx'
 # data2 = '../Datasets/All_Data/2017-11-09/Rhodo_Glycerol_lowlight_25mM_stabilized_v2.xlsx'
 # data2 = '../Datasets/All_Data/2017-11-09/Rhodo_Glycerol_lowlight_25mM.xlsx'
 # data2 = '../Datasets/All_Data/2017-11-13/Chronoamperometry_0.1mM_Fericyanide_5000s_900mV_Bias_Potential.xlsx'
 # data2 = '../Datasets/All_Data/2017-11-13/Chronoamperometry_0.1mM_Fericyanide_5000s.xlsx'
-data2 = '../Datasets/All_Data/2017-11-11/Rhodo_Glucose_lowlight_25mM_stabilized.xlsx'
+#data2 = '../Datasets/All_Data/2017-11-11/Rhodo_Glucose_lowlight_25mM_stabilized.xlsx'
 
+data1 = '../Datasets/All_Data/2017-11-14/Chronoamperometry_Combined_Cathode_Negative_Control_(maybesomeferricyanyde).xlsx'
+data2 = '../Datasets/All_Data/2017-11-14/Chronoamperometry_Separate_Cathode_Negative_Control_(maybesomeferricyanyde).xlsx'
+data3 = '../Datasets/All_Data/2017-11-14/Chronoamperometry_Separate+Combined_Cathode_Negative_Control_(maybesomeferricyanyde)_Full_Run.xlsx'
 
 def construct_dataframe(raw_data):
     import pandas as pd
@@ -62,9 +67,9 @@ def plot_dataframe(data_frame, span):
         (ggplot(data_frame, aes('Time', 'Current', color='Channel'))
             + ylab(u'Current (μA)')
             + xlab('Time (seconds)')
-            + geom_line()
-            + scale_y_log10()
-            + scale_x_log10())
+            + geom_line())
+            # + scale_y_log10()
+            # + scale_x_log10())
             # + theme_bw()
             # + scale_color_grey()
 
@@ -345,6 +350,44 @@ def compare_absolute_deviation_between_runs(data1, data2):
     return all_df
 
 
+def anova_test(data_frame, raw_data):
+    import numpy as np
+    from time import sleep
+    import pandas as pd
+
+    df = data_frame
+
+    channels = construct_dataframe(raw_data)[1]
+
+    ch_list = []
+    og_ch_list = []
+
+    print ('Running Analysis of Variance...')
+
+    for i in (range(0, len(channels))):
+
+        ch_list.append('CH' + str(i + 1))
+        og_ch_list.append('CH' + str(i + 1))
+
+    for i in range(0, len(ch_list)):
+
+        ch_list[i] = df['Channel'] == ch_list[i]  # Construct the true/false dataframe
+        ch_list[i] = df[ch_list[i]]               # Each Dataframe has only one channel
+        ch_list[i] = ch_list[i]['Current']        # Pull only the current out of the dataframe
+
+    f_val, p_val = stats.f_oneway(ch_list)
+
+    print ("One-way ANOVA P =", p_val)
+    print ('One-Way ANOVA F =', f_val)
+
+
+    print (ch_list)
+    exit()
+
+    return anova
+
+
+
 #all_df = compare_absolute_deviation_between_runs(data1, data2)
 
 #exit()
@@ -352,12 +395,24 @@ def compare_absolute_deviation_between_runs(data1, data2):
 span = 0.2
 df_name = 'no_ls'
 
-df = construct_dataframe(data2)
+df = construct_dataframe(data3)
 df = df[0]
+
+anova_test(df, data3)
+
+exit()
+
+CH1 = df['Channel'] == 'CH1'
+CH1 = df[CH1]
+
+variance = CH1['Current'].var()
+sem = stats.sem(CH1['Current'])  # standard error of the mean
 
 #df = construct_lowess_regression(data2, span)
 
-print (df)
+print (variance)
+print (sem)
+exit()
 
 sleep(.1)
 
